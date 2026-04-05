@@ -77,11 +77,14 @@ h.test("run_pipeline with cli step", function()
   })
 
   local steps = {
-    { kind = "cli", spec = {
+    {
+      kind = "cli",
+      name = "cat",
       args = function()
         return {}
       end,
-    }, cmd = "cat" },
+      cmd = "cat",
+    },
   }
   local result = pipeline.run_pipeline(steps, {
     filepath = "/tmp/test.lua",

@@ -42,24 +42,46 @@ local function resolve_cli(name, dirname)
   return spec, cmd
 end
 
+---@param entry formatls.StepInput
+---@return formatls.Step
+local function normalize_step(entry)
+  local raw = type(entry) == "table" and entry[1] or entry
+  local overrides = type(entry) == "table" and entry or nil
+
+  local step
+  if type(raw) == "string" and (raw:match("^source%.") or raw:match("^textDocument/")) then
+    step = { kind = "lsp", name = raw, action = raw }
+  else
+    step = { kind = "cli", name = raw }
+  end
+
+  if overrides then
+    step.server = overrides.server
+    step.condition = overrides.condition
+  end
+
+  return step
+end
+
 function M.resolve_group(groups, dirname)
   for _, group in ipairs(groups) do
     local steps = {}
     local viable = true
 
     for _, entry in ipairs(group) do
-      if entry == "source.format" then
-        steps[#steps + 1] = { kind = "format" }
-      elseif type(entry) == "string" and entry:match("^source%.") then
-        steps[#steps + 1] = { kind = "action", action = entry }
-      else
-        local spec, cmd = resolve_cli(entry, dirname)
+      local step = normalize_step(entry)
+
+      if step.kind == "cli" then
+        local spec, cmd = resolve_cli(step.name, dirname)
         if not spec then
           viable = false
           break
         end
-        steps[#steps + 1] = { kind = "cli", spec = spec, cmd = cmd }
+        step.cmd = cmd
+        step.args = spec.args
       end
+
+      steps[#steps + 1] = step
     end
 
     if viable then
@@ -126,20 +148,26 @@ end
 
 function M.run_pipeline(steps, ctx, content)
   for _, step in ipairs(steps) do
-    if step.kind == "format" then
-      local edits = ctx.get_lsp_edits()
-      if edits then
-        content = M.apply_text_edits(content, edits)
+    local skip = step.condition and not step.condition(vim.uri_to_bufnr(vim.uri_from_fname(ctx.filepath)))
+
+    if not skip then
+      if step.kind == "cli" then
+        local output, err = M.run_cmd({ step.cmd, unpack(step.args(ctx.filepath)) }, content, ctx.dirname)
+        if not output then
+          vim.notify("[formatls] " .. err, vim.log.levels.WARN)
+          return nil
+        end
+        content = output
+      elseif step.kind == "lsp" then
+        if step.action == "textDocument/formatting" then
+          local edits = ctx.get_lsp_edits(step.server)
+          if edits then
+            content = M.apply_text_edits(content, edits)
+          end
+        elseif ctx.exec_action then
+          content = ctx.exec_action(step.action, content, step.server)
+        end
       end
-    elseif step.kind == "cli" then
-      local output, err = M.run_cmd({ step.cmd, unpack(step.spec.args(ctx.filepath)) }, content, ctx.dirname)
-      if not output then
-        vim.notify("[formatls] " .. err, vim.log.levels.WARN)
-        return nil
-      end
-      content = output
-    elseif step.kind == "action" and ctx.exec_action then
-      content = ctx.exec_action(step.action, content)
     end
   end
   return content

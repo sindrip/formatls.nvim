@@ -2,7 +2,7 @@ local Server = require("formatls.server")
 local Proxy = require("formatls.proxy")
 local pipeline = require("formatls.pipeline")
 
-local function exec_action(bufnr, action_kind)
+local function exec_action(bufnr, action_kind, server_name)
   local params = {
     textDocument = { uri = vim.uri_from_bufnr(bufnr) },
     range = {
@@ -15,25 +15,27 @@ local function exec_action(bufnr, action_kind)
   local clients = vim.lsp.get_clients({ bufnr = bufnr, method = "textDocument/codeAction" })
 
   for _, client in ipairs(clients) do
-    local res = client:request_sync("textDocument/codeAction", params, 5000, bufnr)
-    if res and not res.err then
-      for _, action in ipairs(res.result or {}) do
-        if not action.edit then
-          local resolved = client:request_sync("codeAction/resolve", action, 5000, bufnr)
-          if resolved and resolved.result then
-            action = resolved.result
+    if not server_name or client.name == server_name then
+      local res = client:request_sync("textDocument/codeAction", params, 5000, bufnr)
+      if res and not res.err then
+        for _, action in ipairs(res.result or {}) do
+          if not action.edit then
+            local resolved = client:request_sync("codeAction/resolve", action, 5000, bufnr)
+            if resolved and resolved.result then
+              action = resolved.result
+            end
           end
-        end
 
-        if action.edit then
-          vim.lsp.util.apply_workspace_edit(action.edit, client.offset_encoding)
-        end
-        if action.command then
-          local cmds = (client.server_capabilities.executeCommandProvider or {}).commands or {}
-          for _, c in ipairs(cmds) do
-            if c == action.command.command then
-              client:request_sync("workspace/executeCommand", action.command, 5000, bufnr)
-              break
+          if action.edit then
+            vim.lsp.util.apply_workspace_edit(action.edit, client.offset_encoding)
+          end
+          if action.command then
+            local cmds = (client.server_capabilities.executeCommandProvider or {}).commands or {}
+            for _, c in ipairs(cmds) do
+              if c == action.command.command then
+                client:request_sync("workspace/executeCommand", action.command, 5000, bufnr)
+                break
+              end
             end
           end
         end
@@ -42,13 +44,15 @@ local function exec_action(bufnr, action_kind)
   end
 end
 
-local function get_lsp_edits(proxy, bufnr, method, params)
+local function get_lsp_edits(proxy, bufnr, method, params, server_name)
   for _, entry in ipairs(proxy:get_formatters(bufnr)) do
-    local client = vim.lsp.get_client_by_id(entry.client_id)
-    if client then
-      local result = client:request_sync(method, params, 5000, bufnr)
-      if result and result.result and #result.result > 0 then
-        return result.result
+    if not server_name or entry.name == server_name then
+      local client = vim.lsp.get_client_by_id(entry.client_id)
+      if client then
+        local result = client:request_sync(method, params, 5000, bufnr)
+        if result and result.result and #result.result > 0 then
+          return result.result
+        end
       end
     end
   end
@@ -62,12 +66,8 @@ local function handle_format(self, method, params)
 
   local steps = pipeline.resolve_group(self.formatters_by_ft[vim.bo[bufnr].filetype] or {}, dirname)
 
-  local lsp_edits = function()
-    return get_lsp_edits(self.proxy, bufnr, method, params)
-  end
-
   if not steps then
-    return lsp_edits() or {}
+    return get_lsp_edits(self.proxy, bufnr, method, params) or {}
   end
 
   local original = table.concat(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false), "\n") .. "\n"
@@ -75,14 +75,16 @@ local function handle_format(self, method, params)
   local final = pipeline.run_pipeline(steps, {
     filepath = filepath,
     dirname = dirname,
-    get_lsp_edits = lsp_edits,
-    exec_action = function(action_kind, content)
+    get_lsp_edits = function(server)
+      return get_lsp_edits(self.proxy, bufnr, method, params, server)
+    end,
+    exec_action = function(action_kind, content, server)
       local lines = vim.split(content, "\n", { plain = true })
       if #lines > 0 and lines[#lines] == "" then
         table.remove(lines)
       end
       vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
-      exec_action(bufnr, action_kind)
+      exec_action(bufnr, action_kind, server)
       return table.concat(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false), "\n") .. "\n"
     end,
   }, original)
@@ -146,7 +148,7 @@ M.notifications["textDocument/didOpen"] = function(self, params)
 
   local names = {}
   for _, step in ipairs(steps) do
-    names[#names + 1] = step.action or step.cmd or "lsp"
+    names[#names + 1] = step.name
   end
 
   local title = table.concat(names, " | ")

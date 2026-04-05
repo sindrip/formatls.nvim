@@ -30,11 +30,14 @@ vim.lsp.config("formatls", {
   init_options = {
     formatters_by_ft = {
       typescript = {
-        { "biome" },                                      -- try biome first
-        { "source.organizeImports", "prettier" },         -- fall back to organize imports + prettier
+        -- try biome first
+        { "biome" },
+        -- fall back to organize imports + prettier
+        { "source.organizeImports", "prettier" },
       },
       go = {
-        { "source.organizeImports", "source.format" },   -- code actions via gopls
+        -- organize imports + format via gopls
+        { "source.organizeImports", "textDocument/formatting" },
       },
       lua = {
         { "stylua" },
@@ -60,9 +63,9 @@ A group is a list of steps, executed sequentially:
 
 | Step | Description |
 |---|---|
-| `"biome"`, `"prettier"`, `"stylua"` | CLI formatter — must have a spec in `lua/formatls/formatters/` |
-| `"source.organizeImports"` | LSP code action — sent to servers that support `textDocument/codeAction` |
-| `"source.format"` | LSP formatting — delegated to the original server's formatter |
+| `"biome"`, `"prettier"`, `"stylua"` | CLI formatter — resolved via spec |
+| `"source.organizeImports"`, `"source.fixAll"` | LSP code action — sent via `textDocument/codeAction` |
+| `"textDocument/formatting"` | LSP formatting — delegated to a server's formatter |
 
 ### CLI formatter resolution
 

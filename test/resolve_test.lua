@@ -3,33 +3,35 @@ h.setup()
 
 local pipeline = require("formatls.pipeline")
 
-h.test("source.format resolves to format step", function()
-  local steps = pipeline.resolve_group({ { "source.format" } }, "/tmp")
+h.test("textDocument/formatting resolves to lsp step", function()
+  local steps = pipeline.resolve_group({ { "textDocument/formatting" } }, "/tmp")
   h.assert_eq(#steps, 1)
-  h.assert_eq(steps[1].kind, "format")
+  h.assert_eq(steps[1].kind, "lsp")
+  h.assert_eq(steps[1].action, "textDocument/formatting")
 end)
 
-h.test("source.organizeImports resolves to action step", function()
+h.test("source.organizeImports resolves to lsp step", function()
   local steps = pipeline.resolve_group({ { "source.organizeImports" } }, "/tmp")
   h.assert_eq(#steps, 1)
-  h.assert_eq(steps[1].kind, "action")
+  h.assert_eq(steps[1].kind, "lsp")
   h.assert_eq(steps[1].action, "source.organizeImports")
 end)
 
-h.test("mixed source actions and format", function()
-  local steps = pipeline.resolve_group({ { "source.organizeImports", "source.format" } }, "/tmp")
+h.test("mixed source actions and textDocument/formatting", function()
+  local steps = pipeline.resolve_group({ { "source.organizeImports", "textDocument/formatting" } }, "/tmp")
   h.assert_eq(#steps, 2)
-  h.assert_eq(steps[1].kind, "action")
-  h.assert_eq(steps[2].kind, "format")
+  h.assert_eq(steps[1].kind, "lsp")
+  h.assert_eq(steps[2].kind, "lsp")
+  h.assert_eq(steps[2].action, "textDocument/formatting")
 end)
 
 h.test("unavailable CLI falls back to next group", function()
   local steps = pipeline.resolve_group({
     { "nonexistent_formatter" },
-    { "source.format" },
+    { "textDocument/formatting" },
   }, "/tmp")
   h.assert_eq(#steps, 1)
-  h.assert_eq(steps[1].kind, "format")
+  h.assert_eq(steps[1].kind, "lsp")
 end)
 
 h.test("all groups unavailable returns nil", function()
@@ -55,6 +57,30 @@ h.test("CLI available via add_spec", function()
   local steps = pipeline.resolve_group({ { "test_fmt" } }, "/tmp")
   h.assert_eq(#steps, 1)
   h.assert_eq(steps[1].kind, "cli")
+end)
+
+h.test("table-form step with server field", function()
+  local steps = pipeline.resolve_group({
+    { { "source.organizeImports", server = "gopls" }, "textDocument/formatting" },
+  }, "/tmp")
+  h.assert_eq(#steps, 2)
+  h.assert_eq(steps[1].kind, "lsp")
+  h.assert_eq(steps[1].server, "gopls")
+  h.assert_eq(steps[2].kind, "lsp")
+  h.assert_eq(steps[2].server, nil)
+end)
+
+h.test("table-form step with condition", function()
+  local steps = pipeline.resolve_group({
+    { {
+      "source.organizeImports",
+      condition = function()
+        return true
+      end,
+    } },
+  }, "/tmp")
+  h.assert_eq(#steps, 1)
+  h.assert_eq(type(steps[1].condition), "function")
 end)
 
 h.done()
