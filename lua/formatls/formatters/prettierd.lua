@@ -1,14 +1,11 @@
 return {
   meta = {
-    url = "https://github.com/prettier/prettier",
-    description = "An opinionated code formatter.",
+    url = "https://github.com/fsouza/prettierd",
+    description = "prettier, as a daemon, for ludicrous formatting speed.",
   },
-  cmd = "prettier",
+  cmd = "prettierd",
   args = function(path)
-    return {
-      "--stdin-filepath",
-      path,
-    }
+    return { path }
   end,
   -- https://prettier.io/docs/en/configuration.html
   config_files = {

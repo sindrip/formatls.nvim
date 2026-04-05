@@ -1,4 +1,8 @@
 return {
+  meta = {
+    url = "https://github.com/JohnnyMorganz/StyLua",
+    description = "An opinionated code formatter for Lua.",
+  },
   cmd = "stylua",
   args = function(path)
     return {
@@ -6,19 +10,6 @@ return {
       "--respect-ignores",
       "--stdin-filepath",
       path,
-      "-",
-    }
-  end,
-  range_args = function(path, range_start, range_end)
-    return {
-      "--search-parent-directories",
-      "--respect-ignores",
-      "--stdin-filepath",
-      path,
-      "--range-start",
-      tostring(range_start),
-      "--range-end",
-      tostring(range_end),
       "-",
     }
   end,

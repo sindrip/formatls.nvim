@@ -107,4 +107,4 @@ vim.lsp.config("formatls", {
 
 ## Alternatives
 
-- [conform.nvim](https://github.com/stevearc/conform.nvim) — a more mature formatting plugin with a large collection of built-in formatter definitions. The built-in formatter specs in formatls are based on the hard work done by conform.
+- [conform.nvim](https://github.com/stevearc/conform.nvim) — a more mature formatting plugin with a large collection of built-in formatter definitions. The built-in formatter specs in formatls are based on the hard work done by conform and its maintainers.
