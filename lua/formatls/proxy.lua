@@ -71,6 +71,7 @@ function M:add(bufnr, client)
       can_range_format = caps.documentRangeFormattingProvider or false,
     }
     caps.documentFormattingProvider = false
+    caps.documentRangeFormattingProvider = false
   end
 
   local orig = self.client_caps[client.id]
