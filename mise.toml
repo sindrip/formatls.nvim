@@ -1,2 +1,4 @@
 [tools]
 stylua = "latest"
+go = "latest"
+python = "latest"
